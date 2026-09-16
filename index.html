@@ -4,6 +4,43 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
 <title>RAJ Walkie Talkie</title>
+<script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js">
+// ===== Earning plan controls =====
+const planStatus = $('planStatus');
+$('freePlanBtn').onclick = () => {
+  planStatus.textContent = 'Current plan: Free • Member limit: Custom • Ads enabled';
+};
+$('premiumPlanBtn').onclick = () => {
+  planStatus.textContent = 'Premium selected: ₹49/month • Member limit: Custom';
+  alert('Premium plan selected. Real Google Play Billing will be connected in the Android build.');
+};
+$('customPlanBtn').onclick = () => {
+  planStatus.textContent = 'Custom / Business plan selected • Admin and member limits can be configured';
+  alert('Custom plan selected. Final pricing and limits will be controlled securely from App Admin.');
+};
+
+// FINAL GROUP QR SETTINGS PLANS
+(function(){
+const $=id=>document.getElementById(id);
+const KEY='raj_walkie_permanent_group_code_v4';
+const make=()=>{const c='ABCDEFGHJKLMNPQRSTUVWXYZ23456789';let s='';for(let i=0;i<6;i++)s+=c[Math.floor(Math.random()*c.length)];return s};
+let code=localStorage.getItem(KEY)||make(); localStorage.setItem(KEY,code);
+const incoming=new URLSearchParams(location.search).get('office');
+if(incoming) code=incoming.toUpperCase().replace(/[^A-Z0-9]/g,'').slice(0,8)||code;
+localStorage.setItem(KEY,code);
+if($('code')) $('code').value=code;
+if($('groupInfo')) $('groupInfo').textContent='Permanent Group Code: '+code;
+$('copyCode')?.addEventListener('click',async()=>{try{await navigator.clipboard.writeText(code)}catch(e){} if($('groupInfo'))$('groupInfo').textContent='✓ Copied: '+code});
+$('showQR')?.addEventListener('click',()=>{const b=$('qrBox');if(!b)return;b.style.display=b.style.display==='none'?'block':'none';if(b.style.display==='block'){$('qrcode').innerHTML='';if(window.QRCode)new QRCode($('qrcode'),{text:location.origin+location.pathname+'?office='+encodeURIComponent(code),width:190,height:190});$('qrText').textContent=code}});
+$('settingsBtn')?.addEventListener('click',()=>{const p=$('settingsPanel');p.style.display=p.style.display==='none'?'block':'none'});
+$('notifyBtn')?.addEventListener('click',async()=>{if(!('Notification'in window))return $('notifyBtn').textContent='Notifications unavailable';const r=await Notification.requestPermission();$('notifyBtn').textContent=r==='granted'?'✓ Notifications enabled':'Notifications not enabled'});
+$('keepBtn')?.addEventListener('click',async()=>{try{if(navigator.wakeLock?.request)await navigator.wakeLock.request('screen');$('keepBtn').textContent='✓ Wake lock requested'}catch(e){$('keepBtn').textContent='Android service required'}});
+$('freePlanBtn')?.addEventListener('click',()=>{$('planStatus').textContent='Current plan: Free • Member limit: Custom • Ads enabled'});
+$('premiumPlanBtn')?.addEventListener('click',()=>{$('planStatus').textContent='Premium selected: ₹49/month • Member limit: Custom';alert('Premium selected. Real Google Play Billing will be connected in the Android build.')});
+$('customPlanBtn')?.addEventListener('click',()=>{$('planStatus').textContent='Custom / Business selected • Admin and Member limits: Custom';alert('Custom plan selected. Final pricing and limits will be controlled by App Admin.')});
+})();
+
+</script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <style>
 *{box-sizing:border-box}
@@ -22,6 +59,14 @@ button:disabled{opacity:.5}
 .row{display:flex;gap:8px}
 .row>*{flex:1}
 audio{width:100%;margin-top:10px}
+
+.plan-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;margin-top:12px}
+.plan{border:1px solid rgba(255,255,255,.12);border-radius:16px;padding:16px;background:rgba(255,255,255,.04)}
+.plan h3{margin-top:0}
+.plan .price{font-size:28px;font-weight:800;margin:8px 0}
+.plan .price span{font-size:13px;font-weight:400;opacity:.75}
+.plan button{width:100%;margin-top:8px}
+
 </style>
 </head>
 <body>
@@ -41,6 +86,33 @@ audio{width:100%;margin-top:10px}
 <div id="status" class="status">Not connected</div>
 </div>
 
+<div class="card" id="groupCard">
+<h2>👥 Group System</h2>
+<div class="status" id="groupInfo">Permanent group code is stored on this device.</div>
+<div class="row"><button id="copyCode">Copy Code</button><button id="showQR">QR Code</button></div>
+<div id="qrBox" style="display:none;text-align:center;background:#fff;border-radius:14px;padding:12px;margin-top:8px"><div id="qrcode"></div><div id="qrText" style="color:#111;margin-top:8px;font-weight:700"></div></div>
+</div>
+<div class="card" id="settingsCard"><h2>⚙️ Settings</h2><button id="settingsBtn">Open Settings</button><div id="settingsPanel" style="display:none"><button id="notifyBtn">Enable Notifications</button><button id="keepBtn">Background connection: ENABLED</button><div class="small">24×7 background voice needs the Android native foreground-service layer; this web page cannot override Android background restrictions.</div></div></div>
+
+<div class="card" id="earningCard">
+<h2>💰 Earning & Plans</h2>
+<div class="plan-grid">
+<div class="plan"><h3>🆓 Free Plan</h3><div class="price">₹0 <span>/month</span></div>
+<p>👤 Group Admin: <b>1</b></p><p>👥 Member Limit: <b>Custom</b></p><p>📢 Ads: <b>Enabled</b></p>
+<button id="freePlanBtn">Use Free Plan</button></div>
+<div class="plan premium"><h3>⭐ Premium Plan</h3><div class="price">₹49 <span>/month</span></div>
+<p>👤 Group Admin: <b>1</b></p><p>👥 Member Limit: <b>Custom</b></p><p>📢 Ads: <b>Optional</b></p>
+<button id="premiumPlanBtn">Upgrade Premium</button></div>
+<div class="plan business"><h3>🏢 Business / Custom</h3><div class="price">Custom</div>
+<p>👤 Group Admin: <b>Custom</b></p><p>👥 Member Limit: <b>Custom</b></p><p>⚙️ Features: <b>Custom</b></p>
+<button id="customPlanBtn">Request Custom Plan</button></div>
+</div>
+<div class="small" id="planStatus">Current plan: Free • Member limit: Custom</div>
+</div>
+
+<div class="card" id="adminCard"><h2>🛡️ App Admin Control</h2><div class="status">Admin controls</div><div class="row"><button id="adminGroups">Groups</button><button id="adminPlans">Plans</button></div><div id="adminPanel" class="small"></div></div>
+<div class="card" id="connectCard"><h2>📶 Connectivity</h2><div class="status">Wi‑Fi / Mobile data • Bluetooth audio supported by Android layer</div><div class="small">The WebRTC voice channel uses the available internet connection. Native Android Bluetooth routing will be handled by the Android app layer.</div></div>
+
 <div class="card" id="voiceCard" style="display:none">
 <h2>🔊 Office Voice</h2>
 <div id="room" class="status"></div>
@@ -58,193 +130,124 @@ const SUPABASE_KEY='sb_publishable_AT6zontM3G2V3a0dYfzaBQ_nq6K4ozm';
 const sb=supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
 
 let channel=null,localStream=null,localTrack=null,peers=new Map(),officeCode='',speakerOn=true;
+let joinedMembers=new Set(),presenceReady=false,alarmCtx=null,wakeLock=null;
 const $=id=>document.getElementById(id);
 const status=t=>$('status').textContent=t;
 
-function makeCode(){
-  return Math.random().toString(36).slice(2,8).toUpperCase();
+function makeCode(){return Math.random().toString(36).slice(2,8).toUpperCase();}
+function myId(){if(!window._id) window._id=Math.random().toString(36).slice(2)+Date.now();return window._id;}
+
+async function requestAlerts(){
+  try{if('Notification' in window && Notification.permission==='default') await Notification.requestPermission();}catch(e){}
 }
-function myId(){
-  if(!window._id) window._id=Math.random().toString(36).slice(2)+Date.now();
-  return window._id;
+async function keepScreenAwake(){
+  try{if('wakeLock' in navigator && !wakeLock){wakeLock=await navigator.wakeLock.request('screen');wakeLock.addEventListener('release',()=>wakeLock=null);}}catch(e){}
+}
+function playAlarm(){
+  try{
+    if(!alarmCtx) alarmCtx=new (window.AudioContext||window.webkitAudioContext)();
+    if(alarmCtx.state==='suspended') alarmCtx.resume();
+    const now=alarmCtx.currentTime,osc=alarmCtx.createOscillator(),gain=alarmCtx.createGain();
+    osc.type='sine';osc.frequency.setValueAtTime(880,now);osc.frequency.setValueAtTime(660,now+0.18);
+    gain.gain.setValueAtTime(0.0001,now);gain.gain.exponentialRampToValueAtTime(0.22,now+0.02);gain.gain.exponentialRampToValueAtTime(0.0001,now+0.38);
+    osc.connect(gain).connect(alarmCtx.destination);osc.start(now);osc.stop(now+0.4);
+  }catch(e){}
+  try{navigator.vibrate?.([180,100,180]);}catch(e){}
+}
+function notify(title,body){
+  if('Notification' in window && Notification.permission==='granted'){
+    try{new Notification(title,{body,tag:'raj-walkie'});}catch(e){}
+  }
+}
+function incomingPTT(from){
+  if(from===myId()) return;
+  if(document.hidden){notify('📻 RAJ Walkie Talkie','A group member is pressing HOLD TO TALK.');try{navigator.vibrate?.([120,80,120]);}catch(e){}}
+  $('room').textContent='Office code: '+officeCode+' • MEMBER TALKING';
+  setTimeout(()=>{if($('room')) $('room').textContent='Office code: '+officeCode;},900);
+}
+function memberLeft(id){
+  if(!presenceReady || !id || id===myId()) return;
+  if(joinedMembers.has(id)){
+    joinedMembers.delete(id);playAlarm();notify('⚠️ Group member disconnected','A member has left the office group.');
+    $('room').textContent='Office code: '+officeCode+' • MEMBER LEFT';
+    setTimeout(()=>{if($('room')) $('room').textContent='Office code: '+officeCode;},1800);
+  }
 }
 
 async function start(code){
   officeCode=code.trim().toUpperCase();
   if(!officeCode){status('Enter an office code.');return;}
   status('Connecting…');
-
   try{
-    localStream=await navigator.mediaDevices.getUserMedia({
-      audio:{echoCancellation:true,noiseSuppression:true,autoGainControl:true}
+    await requestAlerts();await keepScreenAwake();
+    localStream=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:true,noiseSuppression:true,autoGainControl:true}});
+    localTrack=localStream.getAudioTracks()[0];localTrack.enabled=false;
+    channel=sb.channel('office:'+officeCode,{config:{broadcast:{ack:false},presence:{key:myId()}}});
+
+    channel.on('broadcast',{event:'hello'},async({payload})=>{if(payload?.from&&payload.from!==myId()) await channel.send({type:'broadcast',event:'hello-ack',payload:{from:myId(),to:payload.from}});});
+    channel.on('broadcast',{event:'hello-ack'},async({payload})=>{if(payload?.to===myId()) await makeOffer(payload.from);});
+    channel.on('broadcast',{event:'offer'},async({payload})=>{if(payload?.to===myId()) await acceptOffer(payload.from,payload.sdp);});
+    channel.on('broadcast',{event:'answer'},async({payload})=>{if(payload?.to===myId()){const pc=peers.get(payload.from);if(pc) await pc.setRemoteDescription(payload.sdp);}});
+    channel.on('broadcast',{event:'ice'},async({payload})=>{if(payload?.to===myId()){const pc=peers.get(payload.from);if(pc&&payload.candidate){try{await pc.addIceCandidate(payload.candidate)}catch(e){}}}});
+    channel.on('broadcast',{event:'ptt-start'},({payload})=>incomingPTT(payload?.from));
+    channel.on('broadcast',{event:'ptt-stop'},({payload})=>{if(payload?.from!==myId()&&$('room'))$('room').textContent='Office code: '+officeCode;});
+
+    channel.on('presence',{event:'sync'},()=>{
+      const state=channel.presenceState(),ids=new Set(Object.keys(state));
+      if(!presenceReady){joinedMembers=new Set(ids);presenceReady=true;return;}
+      for(const id of joinedMembers) if(!ids.has(id)) memberLeft(id);
+      joinedMembers=ids;
     });
-    localTrack=localStream.getAudioTracks()[0];
-    localTrack.enabled=false;
+    channel.on('presence',{event:'join'},({key})=>{if(presenceReady&&key!==myId())joinedMembers.add(key);});
+    channel.on('presence',{event:'leave'},({key})=>memberLeft(key));
 
-    channel=sb.channel('office:'+officeCode,{config:{broadcast:{ack:false}}});
-
-    channel.on('broadcast',{event:'hello'},async({payload})=>{
-      if(payload?.from && payload.from!==myId()){
-        await channel.send({
-          type:'broadcast',event:'hello-ack',
-          payload:{from:myId(),to:payload.from}
-        });
-      }
-    });
-
-    channel.on('broadcast',{event:'hello-ack'},async({payload})=>{
-      if(payload?.to===myId()) await makeOffer(payload.from);
-    });
-
-    channel.on('broadcast',{event:'offer'},async({payload})=>{
-      if(payload?.to===myId()) await acceptOffer(payload.from,payload.sdp);
-    });
-
-    channel.on('broadcast',{event:'answer'},async({payload})=>{
-      if(payload?.to===myId()){
-        const pc=peers.get(payload.from);
-        if(pc) await pc.setRemoteDescription(payload.sdp);
-      }
-    });
-
-    channel.on('broadcast',{event:'ice'},async({payload})=>{
-      if(payload?.to===myId()){
-        const pc=peers.get(payload.from);
-        if(pc && payload.candidate){
-          try{await pc.addIceCandidate(payload.candidate)}catch(e){}
-        }
-      }
-    });
-
-    await channel.subscribe();
-
-    $('joinCard').style.display='none';
-    $('voiceCard').style.display='block';
-    $('room').textContent='Office code: '+officeCode;
-    status('Connected');
-
-    await channel.send({
-      type:'broadcast',event:'hello',
-      payload:{from:myId()}
-    });
-
-    updateDevices();
-  }catch(e){
-    status('Microphone/connection error: '+e.message);
-  }
+    await channel.subscribe(async subStatus=>{if(subStatus==='SUBSCRIBED') await channel.track({online:true,device:'web'});});
+    $('joinCard').style.display='none';$('voiceCard').style.display='block';$('room').textContent='Office code: '+officeCode;status('Connected');
+    await channel.send({type:'broadcast',event:'hello',payload:{from:myId()}});updateDevices();
+  }catch(e){status('Microphone/connection error: '+e.message);}
 }
 
 function pcFor(id){
-  let pc=peers.get(id);
-  if(pc)return pc;
-
-  pc=new RTCPeerConnection({
-    iceServers:[
-      {urls:'stun:stun.l.google.com:19302'},
-      {urls:'stun:stun1.l.google.com:19302'}
-    ]
-  });
-
+  let pc=peers.get(id);if(pc)return pc;
+  pc=new RTCPeerConnection({iceServers:[{urls:'stun:stun.l.google.com:19302'},{urls:'stun:stun1.l.google.com:19302'}]});
   localStream.getTracks().forEach(t=>pc.addTrack(t,localStream));
-
-  pc.onicecandidate=e=>{
-    if(e.candidate){
-      channel.send({
-        type:'broadcast',event:'ice',
-        payload:{from:myId(),to:id,candidate:e.candidate}
-      });
-    }
-  };
-
-  pc.ontrack=e=>{
-    if(e.streams[0]) $('remote').srcObject=e.streams[0];
-  };
-
-  pc.onconnectionstatechange=()=>{
-    if(['failed','closed','disconnected'].includes(pc.connectionState)){
-      pc.close();
-      peers.delete(id);
-      if(peers.size===0) $('remote').srcObject=null;
-    }
-  };
-
-  peers.set(id,pc);
-  return pc;
+  pc.onicecandidate=e=>{if(e.candidate)channel.send({type:'broadcast',event:'ice',payload:{from:myId(),to:id,candidate:e.candidate}});};
+  pc.ontrack=e=>{if(e.streams[0])$('remote').srcObject=e.streams[0];};
+  pc.onconnectionstatechange=()=>{if(['failed','closed','disconnected'].includes(pc.connectionState)){pc.close();peers.delete(id);if(peers.size===0)$('remote').srcObject=null;}};
+  peers.set(id,pc);return pc;
 }
+async function makeOffer(id){if(!id||id===myId())return;const pc=pcFor(id),offer=await pc.createOffer();await pc.setLocalDescription(offer);await channel.send({type:'broadcast',event:'offer',payload:{from:myId(),to:id,sdp:offer}});}
+async function acceptOffer(id,sdp){if(!id||id===myId())return;const pc=pcFor(id);await pc.setRemoteDescription(sdp);const ans=await pc.createAnswer();await pc.setLocalDescription(ans);await channel.send({type:'broadcast',event:'answer',payload:{from:myId(),to:id,sdp:ans}});}
+function updateDevices(){navigator.mediaDevices.enumerateDevices().then(ds=>{$('devices').textContent='Audio inputs: '+ds.filter(d=>d.kind==='audioinput').length+' • Outputs: '+ds.filter(d=>d.kind==='audiooutput').length;});}
 
-async function makeOffer(id){
-  if(!id || id===myId())return;
-  const pc=pcFor(id);
-  const offer=await pc.createOffer();
-  await pc.setLocalDescription(offer);
-  await channel.send({
-    type:'broadcast',event:'offer',
-    payload:{from:myId(),to:id,sdp:offer}
-  });
-}
-
-async function acceptOffer(id,sdp){
-  if(!id || id===myId())return;
-  const pc=pcFor(id);
-  await pc.setRemoteDescription(sdp);
-  const ans=await pc.createAnswer();
-  await pc.setLocalDescription(ans);
-  await channel.send({
-    type:'broadcast',event:'answer',
-    payload:{from:myId(),to:id,sdp:ans}
-  });
-}
-
-function updateDevices(){
-  navigator.mediaDevices.enumerateDevices().then(ds=>{
-    $('devices').textContent=
-      'Audio inputs: '+ds.filter(d=>d.kind==='audioinput').length+
-      ' • Outputs: '+ds.filter(d=>d.kind==='audiooutput').length;
-  });
-}
-
-$('create').onclick=()=>{
-  const c=makeCode();
-  $('code').value=c;
-  start(c);
-};
-
+$('create').onclick=()=>{const c=makeCode();$('code').value=c;start(c);};
 $('join').onclick=()=>start($('code').value);
+$('ptt').onpointerdown=async e=>{e.preventDefault();await keepScreenAwake();if(localTrack){localTrack.enabled=true;$('ptt').classList.add('talking');$('ptt').textContent='TALKING…';if(channel)channel.send({type:'broadcast',event:'ptt-start',payload:{from:myId()}});}};
+function stopTalk(){if(localTrack){localTrack.enabled=false;$('ptt').classList.remove('talking');$('ptt').textContent='HOLD TO TALK';if(channel)channel.send({type:'broadcast',event:'ptt-stop',payload:{from:myId()}});}}
+$('ptt').onpointerup=stopTalk;$('ptt').onpointercancel=stopTalk;$('ptt').onpointerleave=stopTalk;
+$('speaker').onclick=()=>{speakerOn=!speakerOn;$('remote').muted=!speakerOn;$('speaker').textContent='🔊 Speaker: '+(speakerOn?'ON':'OFF');};
+document.addEventListener('visibilitychange',async()=>{if(!document.hidden)await keepScreenAwake();});
+$('leave').onclick=async()=>{try{if(channel){await channel.send({type:'broadcast',event:'member-left',payload:{from:myId()}});await channel.untrack();await sb.removeChannel(channel);}}catch(e){}for(const pc of peers.values())pc.close();peers.clear();if(localStream)localStream.getTracks().forEach(t=>t.stop());location.reload();};
 
-$('ptt').onpointerdown=e=>{
-  e.preventDefault();
-  if(localTrack){
-    localTrack.enabled=true;
-    $('ptt').classList.add('talking');
-    $('ptt').textContent='TALKING…';
-  }
-};
-
-function stopTalk(){
-  if(localTrack){
-    localTrack.enabled=false;
-    $('ptt').classList.remove('talking');
-    $('ptt').textContent='HOLD TO TALK';
-  }
-}
-
-$('ptt').onpointerup=stopTalk;
-$('ptt').onpointercancel=stopTalk;
-$('ptt').onpointerleave=stopTalk;
-
-$('speaker').onclick=()=>{
-  speakerOn=!speakerOn;
-  $('remote').muted=!speakerOn;
-  $('speaker').textContent='🔊 Speaker: '+(speakerOn?'ON':'OFF');
-};
-
-$('leave').onclick=()=>{
-  for(const pc of peers.values()) pc.close();
-  peers.clear();
-  if(channel) sb.removeChannel(channel);
-  if(localStream) localStream.getTracks().forEach(t=>t.stop());
-  location.reload();
-};
+// ===== Stable group code / QR / settings / admin =====
+const STABLE_CODE_KEY='raj_walkie_stable_office_code_v1';
+let stableCode=localStorage.getItem(STABLE_CODE_KEY);
+if(!stableCode){stableCode=makeCode();localStorage.setItem(STABLE_CODE_KEY,stableCode);}
+$('code').value=stableCode;
+$('groupInfo').textContent='Permanent group code: '+stableCode;
+$('copyCode').onclick=async()=>{try{await navigator.clipboard.writeText(stableCode);}catch(e){}$('groupInfo').textContent='✓ Group code: '+stableCode;};
+$('showQR').onclick=()=>{const b=$('qrBox');b.style.display=b.style.display==='none'?'block':'none';if(b.style.display==='block'){$('qrcode').innerHTML='';new QRCode($('qrcode'),{text:location.origin+location.pathname+'?office='+encodeURIComponent(stableCode),width:190,height:190});$('qrText').textContent=stableCode;}};
+const urlOffice=new URLSearchParams(location.search).get('office');
+if(urlOffice){stableCode=urlOffice.toUpperCase().replace(/[^A-Z0-9]/g,'').slice(0,8)||stableCode;localStorage.setItem(STABLE_CODE_KEY,stableCode);$('code').value=stableCode;$('groupInfo').textContent='QR/referral group code: '+stableCode;}
+$('settingsBtn').onclick=()=>{$('settingsPanel').style.display=$('settingsPanel').style.display==='none'?'block':'none';};
+$('notifyBtn').onclick=async()=>{if(!('Notification'in window))return;$('notifyBtn').textContent=(await Notification.requestPermission())==='granted'?'✓ Notifications enabled':'Notifications not enabled';};
+$('keepBtn').onclick=async()=>{try{await keepScreenAwake();$('keepBtn').textContent='✓ Wake lock requested';}catch(e){$('keepBtn').textContent='Android service required for 24×7';}};
+$('upgradeBtn').onclick=()=>alert('Premium upgrade is ready as a UI hook. Real billing requires Google Play Billing + backend verification.');
+$('businessBtn').onclick=()=>alert('Custom / Business plan is ready as a UI hook. Secure plan enforcement will use the backend.');
+$('adminGroups').onclick=()=>{$('adminPanel').textContent='Group controls: roles, member limits, enable/disable group and QR/code management.';};
+$('adminPlans').onclick=()=>{$('adminPanel').textContent='Plan controls: Free / Premium / Business, monthly price, user limit and ads.';};
+function requestNativeBackgroundVoice(){try{if(window.RAJWalkie&&typeof window.RAJWalkie.startForegroundVoice==='function')window.RAJWalkie.startForegroundVoice(stableCode);}catch(e){}}
+window.addEventListener('load',requestNativeBackgroundVoice);
 </script>
 </body>
 </html>
