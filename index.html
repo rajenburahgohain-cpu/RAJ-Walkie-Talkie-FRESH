@@ -1,0 +1,250 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>RAJ Walkie Talkie</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#08101f;color:#eef4ff;font-family:Arial,sans-serif}
+.wrap{max-width:620px;margin:auto;padding:18px}
+.card{background:#111c31;border:1px solid #263754;border-radius:18px;padding:18px;margin:12px 0;box-shadow:0 10px 30px #0004}
+h1{font-size:25px;margin:0 0 6px}
+h2{font-size:18px}
+input,button{width:100%;padding:14px;border-radius:12px;border:1px solid #40506d;background:#0b1426;color:#fff;font-size:16px;margin:6px 0}
+button{background:#1769ff;border:0;font-weight:700}
+button:disabled{opacity:.5}
+.ptt{height:150px;border-radius:50%;font-size:28px;background:#c62828;margin:20px auto;display:block;max-width:260px;touch-action:none}
+.ptt.talking{background:#16803c}
+.status{padding:10px;border-radius:10px;background:#0b1426;color:#a9c4ff}
+.small{font-size:13px;color:#9fb0c9}
+.row{display:flex;gap:8px}
+.row>*{flex:1}
+audio{width:100%;margin-top:10px}
+</style>
+</head>
+<body>
+<div class="wrap">
+<div class="card">
+<h1>📻 RAJ Walkie Talkie</h1>
+<div class="small">Private Office Communication</div>
+</div>
+
+<div class="card" id="joinCard">
+<h2>Office</h2>
+<input id="code" placeholder="Enter office code">
+<div class="row">
+<button id="create">Create Office</button>
+<button id="join">Join Office</button>
+</div>
+<div id="status" class="status">Not connected</div>
+</div>
+
+<div class="card" id="voiceCard" style="display:none">
+<h2>🔊 Office Voice</h2>
+<div id="room" class="status"></div>
+<button id="speaker">🔊 Speaker: ON</button>
+<button id="ptt" class="ptt">HOLD TO TALK</button>
+<audio id="remote" autoplay playsinline controls></audio>
+<div id="devices" class="small"></div>
+<button id="leave">Leave Office</button>
+</div>
+</div>
+
+<script>
+const SUPABASE_URL='https://nxpagmvyoylhtprzccxs.supabase.co';
+const SUPABASE_KEY='sb_publishable_AT6zontM3G2V3a0dYfzaBQ_nq6K4ozm';
+const sb=supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
+
+let channel=null,localStream=null,localTrack=null,peers=new Map(),officeCode='',speakerOn=true;
+const $=id=>document.getElementById(id);
+const status=t=>$('status').textContent=t;
+
+function makeCode(){
+  return Math.random().toString(36).slice(2,8).toUpperCase();
+}
+function myId(){
+  if(!window._id) window._id=Math.random().toString(36).slice(2)+Date.now();
+  return window._id;
+}
+
+async function start(code){
+  officeCode=code.trim().toUpperCase();
+  if(!officeCode){status('Enter an office code.');return;}
+  status('Connecting…');
+
+  try{
+    localStream=await navigator.mediaDevices.getUserMedia({
+      audio:{echoCancellation:true,noiseSuppression:true,autoGainControl:true}
+    });
+    localTrack=localStream.getAudioTracks()[0];
+    localTrack.enabled=false;
+
+    channel=sb.channel('office:'+officeCode,{config:{broadcast:{ack:false}}});
+
+    channel.on('broadcast',{event:'hello'},async({payload})=>{
+      if(payload?.from && payload.from!==myId()){
+        await channel.send({
+          type:'broadcast',event:'hello-ack',
+          payload:{from:myId(),to:payload.from}
+        });
+      }
+    });
+
+    channel.on('broadcast',{event:'hello-ack'},async({payload})=>{
+      if(payload?.to===myId()) await makeOffer(payload.from);
+    });
+
+    channel.on('broadcast',{event:'offer'},async({payload})=>{
+      if(payload?.to===myId()) await acceptOffer(payload.from,payload.sdp);
+    });
+
+    channel.on('broadcast',{event:'answer'},async({payload})=>{
+      if(payload?.to===myId()){
+        const pc=peers.get(payload.from);
+        if(pc) await pc.setRemoteDescription(payload.sdp);
+      }
+    });
+
+    channel.on('broadcast',{event:'ice'},async({payload})=>{
+      if(payload?.to===myId()){
+        const pc=peers.get(payload.from);
+        if(pc && payload.candidate){
+          try{await pc.addIceCandidate(payload.candidate)}catch(e){}
+        }
+      }
+    });
+
+    await channel.subscribe();
+
+    $('joinCard').style.display='none';
+    $('voiceCard').style.display='block';
+    $('room').textContent='Office code: '+officeCode;
+    status('Connected');
+
+    await channel.send({
+      type:'broadcast',event:'hello',
+      payload:{from:myId()}
+    });
+
+    updateDevices();
+  }catch(e){
+    status('Microphone/connection error: '+e.message);
+  }
+}
+
+function pcFor(id){
+  let pc=peers.get(id);
+  if(pc)return pc;
+
+  pc=new RTCPeerConnection({
+    iceServers:[
+      {urls:'stun:stun.l.google.com:19302'},
+      {urls:'stun:stun1.l.google.com:19302'}
+    ]
+  });
+
+  localStream.getTracks().forEach(t=>pc.addTrack(t,localStream));
+
+  pc.onicecandidate=e=>{
+    if(e.candidate){
+      channel.send({
+        type:'broadcast',event:'ice',
+        payload:{from:myId(),to:id,candidate:e.candidate}
+      });
+    }
+  };
+
+  pc.ontrack=e=>{
+    if(e.streams[0]) $('remote').srcObject=e.streams[0];
+  };
+
+  pc.onconnectionstatechange=()=>{
+    if(['failed','closed','disconnected'].includes(pc.connectionState)){
+      pc.close();
+      peers.delete(id);
+      if(peers.size===0) $('remote').srcObject=null;
+    }
+  };
+
+  peers.set(id,pc);
+  return pc;
+}
+
+async function makeOffer(id){
+  if(!id || id===myId())return;
+  const pc=pcFor(id);
+  const offer=await pc.createOffer();
+  await pc.setLocalDescription(offer);
+  await channel.send({
+    type:'broadcast',event:'offer',
+    payload:{from:myId(),to:id,sdp:offer}
+  });
+}
+
+async function acceptOffer(id,sdp){
+  if(!id || id===myId())return;
+  const pc=pcFor(id);
+  await pc.setRemoteDescription(sdp);
+  const ans=await pc.createAnswer();
+  await pc.setLocalDescription(ans);
+  await channel.send({
+    type:'broadcast',event:'answer',
+    payload:{from:myId(),to:id,sdp:ans}
+  });
+}
+
+function updateDevices(){
+  navigator.mediaDevices.enumerateDevices().then(ds=>{
+    $('devices').textContent=
+      'Audio inputs: '+ds.filter(d=>d.kind==='audioinput').length+
+      ' • Outputs: '+ds.filter(d=>d.kind==='audiooutput').length;
+  });
+}
+
+$('create').onclick=()=>{
+  const c=makeCode();
+  $('code').value=c;
+  start(c);
+};
+
+$('join').onclick=()=>start($('code').value);
+
+$('ptt').onpointerdown=e=>{
+  e.preventDefault();
+  if(localTrack){
+    localTrack.enabled=true;
+    $('ptt').classList.add('talking');
+    $('ptt').textContent='TALKING…';
+  }
+};
+
+function stopTalk(){
+  if(localTrack){
+    localTrack.enabled=false;
+    $('ptt').classList.remove('talking');
+    $('ptt').textContent='HOLD TO TALK';
+  }
+}
+
+$('ptt').onpointerup=stopTalk;
+$('ptt').onpointercancel=stopTalk;
+$('ptt').onpointerleave=stopTalk;
+
+$('speaker').onclick=()=>{
+  speakerOn=!speakerOn;
+  $('remote').muted=!speakerOn;
+  $('speaker').textContent='🔊 Speaker: '+(speakerOn?'ON':'OFF');
+};
+
+$('leave').onclick=()=>{
+  for(const pc of peers.values()) pc.close();
+  peers.clear();
+  if(channel) sb.removeChannel(channel);
+  if(localStream) localStream.getTracks().forEach(t=>t.stop());
+  location.reload();
+};
+</script>
+</body>
+</html>
